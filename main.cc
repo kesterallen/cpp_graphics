@@ -7,6 +7,7 @@ int winWidth = 800; // pix
 int winHeight = 800; // pix
 GLfloat viewAngle = 90.0; // deg
 
+bool ignoreOthers = false;
 bool isPaused = false;
 bool isPenguin = true;
 int iView = 0;
@@ -28,6 +29,7 @@ GLfloat cameraPhiStep = 0.1;
 Point eye, look, up;
 
 Bowl bowl;
+VoxelGrid voxelGrid;
 PenguinsContainer penguins;
 
 void initFish() {
@@ -65,22 +67,23 @@ void display() {
     glLightfv(GL_LIGHT0, GL_POSITION, posLight);
     glLoadIdentity();
 
-    // View from outside of bowl or from a penguin 
+    // Set the viewpoint to be either the outside of bowl,
+    // or from a penguin's POV
     if (iView > 0) {
-        Penguin& p = penguins[iView];
-        //p->setColor(1.0, 1.0, 1.0);
-        Point v = p.getVel();
-        v.makeLength(p.getSize());
+        Penguin penguin = penguins[iView];
 
-        eye = p - v * 20.0;
-        look = p + v; // TODO rotate *this* by p.getHeadYaw()
+        const Point p = penguin.getPosRef();
+        Point v = penguin.getVelCopy(penguin.getScale() * 20.0);
+
+        eye = p - v;
+        look = p + v; // TODO rotate *this* by p.getHeadYaw()?
         up = Point(0.0, 0.0, 1.0);
-        glRotatef(p.getHeadYaw(), 0.0, -1.0, 0.0);
+        glRotatef(penguin.getHeadYaw(), 0.0, -1.0, 0.0);
     }
     gluLookAt(
-        eye.getX(), eye.getY(), eye.getZ(),
-        look.getX(), look.getY(), look.getZ(),
-        up.getX(), up.getY(), up.getZ()
+        eye.x(), eye.y(), eye.z(),
+        look.x(), look.y(), look.z(),
+        up.x(), up.y(), up.z()
     );
 
     // Draw bowl and penguins:
@@ -103,7 +106,7 @@ void animation(int id) {
 
     if (!isPaused) {
         for (penguinIt it = penguins.begin(); it != penguins.end(); ++it) {
-            it->timeStep(penguins, bowl);
+            it->timeStep(penguins, bowl, voxelGrid, ignoreOthers);
         }
 
         eye.setPos(
@@ -169,6 +172,10 @@ void keyboard(unsigned char key, int x, int y) {
     case 'c':
     case 'C':
         isPenguin = !isPenguin;
+        break;
+    case 'i':
+    case 'I':
+        ignoreOthers = !ignoreOthers;
         break;
     case 'v':
     case 'V':

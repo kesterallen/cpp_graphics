@@ -7,45 +7,58 @@
 #include <stdlib.h>
 #include <iostream>
 
+#include <unordered_set>
+
 #include "Point.h"
 
 using std::cout;
 using std::endl;
 
+const int NUM_VOXEL_DIVS = 10;
+
+class Penguin;
+
 class Bowl {
     public:
         Bowl();
-        ~Bowl() {
-        }
+        ~Bowl() {}
         void draw() const;
         void timeStep();
         Point vecToEdge(const Point& pt) const;
+
         Point vecFromEdge(const Point& pt) const;
         Point positionOfEdge(const Point& pt) const;
         bool isOutside(const Point pt) const;
         bool isOutside(const double px, const double py, const double pz) const;
 
+        Point getVoxelAddress(const Point& point) const;
+
     private:
-        Point center;
-        double radius;
+        Point m_center;
+        double m_radius;
+        //std::unordered_set<Penguin*> m_voxels[NUM_VOXEL_DIVS][NUM_VOXEL_DIVS][NUM_VOXEL_DIVS];
+        int m_voxels[NUM_VOXEL_DIVS][NUM_VOXEL_DIVS][NUM_VOXEL_DIVS];
+
+
 };
 
 Bowl::Bowl() {
-    center = Point(0.0, 0.0, 0.0);
-    radius = 1.0;
+    m_center = Point(0.0, 0.0, 0.0);
+    m_radius = 1.0;
 }
 
 void Bowl::draw() const {
-    ; // do nothing
+    ;
 }
 
 void Bowl::timeStep() {
-    ; // do nothing
+    // TODO: move voxelgrid operations here
+    ;
 }
 
 Point Bowl::vecToEdge(const Point& pt) const {
     Point out = pt;
-    out.makeLength(radius);
+    out.makeLength(m_radius);
     return out - pt;
 }
 
@@ -56,25 +69,55 @@ Point Bowl::vecFromEdge(const Point& pt) const {
 }
 
 Point Bowl::positionOfEdge(const Point& pt) const {
-    float distX = 0.5 - std::abs(pt.getX());
-    float distY = 0.5 - std::abs(pt.getY());
-    float distZ = 0.5 - std::abs(pt.getZ());
+    float dx = 0.5 - std::abs(pt.x());
+    float dy = 0.5 - std::abs(pt.y());
+    float dz = 0.5 - std::abs(pt.z());
 
     Point edge = pt;
 
-    if (distX < distY && distX < distZ) {
-        edge.setX(distX);
-    } else if (distY < distX && distY < distZ) {
-        edge.setY(distY);
+    // TODO: figure out and document this:
+    if (dx < dy && dx < dz) {
+        edge.x(dx);
+    } else if (dy < dx && dy < dz) {
+        edge.y(dy);
     } else {
-        edge.setZ(distZ);
+        edge.z(dz);
     }
-
     return edge;
 }
 
 bool Bowl::isOutside(const Point pt) const {
-    return (pt - center).getDist() > radius;
+    return (pt - m_center).size() > m_radius;
+}
+
+Point Bowl::getVoxelAddress(const Point& point) const {
+    Point address = (m_center - point + m_radius) * NUM_VOXEL_DIVS / m_radius / 2;
+    return address;
+    //m_voxels[vx.ix()][vx.iy()][vx.iz()] = 9;
+}
+
+class VoxelGrid {
+    public:
+        VoxelGrid();
+        ~VoxelGrid() {}
+
+        void updateContents(const Point& address);
+    private:
+        int m_voxels[NUM_VOXEL_DIVS][NUM_VOXEL_DIVS][NUM_VOXEL_DIVS];
+};
+
+VoxelGrid::VoxelGrid() {
+    for (int i = 0; i < NUM_VOXEL_DIVS; ++i) {
+        for (int j = 0; j < NUM_VOXEL_DIVS; ++j) {
+            for (int k = 0; k < NUM_VOXEL_DIVS; ++k) {
+                //m_voxels[i][j][k] = std::unordered_set<Penguin*>();
+                m_voxels[i][j][k] = 0;
+            }
+        }
+    }
+}
+void VoxelGrid::updateContents(const Point& address) {
+    m_voxels[address.ix()][address.iy()][address.iz()] = 9;
 }
 
 #endif

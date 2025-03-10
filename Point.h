@@ -18,37 +18,34 @@ class Point {
         Point(const Point& pt);
         Point(const GLfloat* pos);
         Point(GLfloat x, GLfloat y, GLfloat z);
-        ~Point() {
-        }
-        void draw() const;
-        GLfloat getX() const {
-            return m_pos[0];
-        }
-        GLfloat getY() const {
-            return m_pos[1];
-        }
-        GLfloat getZ() const {
-            return m_pos[2];
-        }
-        float getDist() const;
+        ~Point() { }
 
-        Point getPos() const {
-            return Point(m_pos);
-        }
+        void draw() const;
+
+        GLfloat x() const { return m_x; }
+        GLfloat y() const { return m_y; }
+        GLfloat z() const { return m_z; }
+        int ix() const { return int(m_x); }
+        int iy() const { return int(m_y); }
+        int iz() const { return int(m_z); }
+
+        void x(GLfloat x) { m_x = x; }
+        void y(GLfloat y) { m_y = y; }
+        void z(GLfloat z) { m_z = z; }
+
+        // TODO:
+        const Point getPos() const { return *this; }
+
         void setPos(GLfloat *pos);
         void setPos(Point pt);
-        void setPos(GLfloat px, GLfloat py, GLfloat pz);
-        void moveBy(Point pt);
+        void setPos(GLfloat x, GLfloat y, GLfloat z);
 
         Point cross(const Point& other) const;
         float dot(const Point& other) const;
 
-        void makeLength(float wantedLength);
-
         void reverse();
         float size() const;
-
-        void dump() const;
+        void makeLength(float length);
 
         Point& operator+=(const Point& other);
         Point& operator-=(const Point& other);
@@ -58,35 +55,30 @@ class Point {
 
         Point& operator=(const Point& other);
         Point operator+(const Point& other) const;
+        Point operator+(const float factor) const;
         Point operator-(const Point& other) const;
         Point operator*(const float factor) const;
         Point operator/(const float factor) const;
 
-        void setX(GLfloat pos) {
-            m_pos[0] = pos;
-        }
-        void setY(GLfloat pos) {
-            m_pos[1] = pos;
-        }
-        void setZ(GLfloat pos) {
-            m_pos[2] = pos;
-        }
+        void dump() const;
     protected:
-        GLfloat m_pos[3];
+        GLfloat m_x;
+        GLfloat m_y;
+        GLfloat m_z;
 };
 
 Point::Point() {
     Point(0.0, 0.0, 0.0);
 }
 
-Point::Point(const GLfloat* pos) {
-    Point(pos[0], pos[1], pos[2]);
+Point::Point(const GLfloat* position) {
+    Point(position[0], position[1], position[2]);
 }
 
 Point::Point(GLfloat x, GLfloat y, GLfloat z) {
-    setX(x);
-    setY(y);
-    setZ(z);
+    m_x = x;
+    m_y = y;
+    m_z = z;
 }
 
 Point::Point(const Point& pt) {
@@ -95,90 +87,94 @@ Point::Point(const Point& pt) {
 
 void Point::draw() const {
     glPushMatrix();
-    glTranslatef(getX(), getY(), getZ());
-    glutWireCube(1.0);
+        glTranslatef(m_x, m_y, m_z);
+        glutWireCube(1.0);
     glPopMatrix();
 }
 
-void Point::setPos(Point pt) {
-    setX(pt.getX());
-    setY(pt.getY());
-    setZ(pt.getZ());
+void Point::setPos(Point point) {
+    m_x = point.x();
+    m_y = point.y();
+    m_z = point.z();
 }
 
-void Point::setPos(GLfloat *pos) {
-    setX(pos[0]);
-    setY(pos[1]);
-    setZ(pos[2]);
+void Point::setPos(GLfloat *position) {
+    m_x = position[0];
+    m_y = position[1];
+    m_z = position[2];
 }
 
-void Point::setPos(GLfloat px, GLfloat py, GLfloat pz) {
-    setX(px);
-    setY(py);
-    setZ(pz);
+void Point::setPos(GLfloat x, GLfloat y, GLfloat z) {
+    m_x = x;
+    m_y = y;
+    m_z = z;
 }
 
-float Point::getDist() const {
-    return sqrt(pow(getX(), 2) + pow(getY(), 2) + pow(getZ(), 2));
+float Point::size() const {
+    return sqrt(pow(m_x, 2) + pow(m_y, 2) + pow(m_z, 2));
 }
 
 void Point::dump() const {
-    std::cout << "x " << getX() << " y " << getY() << " z " << getZ() << std::endl;
+    std::cout << "x " << m_x << " y " << m_y << " z " << m_z << std::endl;
 }
 
 void Point::reverse() {
     *this *= -1.0;
 }
 
-float Point::size() const {
-    return getDist();
-}
-
 Point& Point::operator+=(const Point& other) {
-    setX(getX() + other.getX());
-    setY(getY() + other.getY());
-    setZ(getZ() + other.getZ());
+    m_x += other.x();
+    m_y += other.y();
+    m_z += other.z();
     return *this;
 }
 
 Point& Point::operator-=(const Point& other) {
-    setX(getX() - other.getX());
-    setY(getY() - other.getY());
-    setZ(getZ() - other.getZ());
+    m_x -= other.x();
+    m_y -= other.y();
+    m_z -= other.z();
     return *this;
 }
 
-Point& Point::operator *=(float factor) {
-    setX(getX() * factor);
-    setY(getY() * factor);
-    setZ(getZ() * factor);
+Point& Point::operator*=(float factor) {
+    m_x *= factor;
+    m_y *= factor;
+    m_z *= factor;
     return *this;
 }
 
-Point& Point::operator *=(const Point& other) {
-    setX(getX() * other.getX());
-    setY(getY() * other.getY());
-    setZ(getZ() * other.getZ());
+Point& Point::operator*=(const Point& other) {
+    m_x *= other.x();
+    m_y *= other.y();
+    m_z *= other.z();
     return *this;
 }
 
-Point& Point::operator /=(float factor) {
-    setX(getX() / factor);
-    setY(getY() / factor);
-    setZ(getZ() / factor);
+Point& Point::operator/=(float factor) {
+    m_x /= factor;
+    m_y /= factor;
+    m_z /= factor;
     return *this;
 }
 
 Point& Point::operator=(const Point& other) {
-    setX(other.getX());
-    setY(other.getY());
-    setZ(other.getZ());
+    m_x = other.x();
+    m_y = other.y();
+    m_z = other.z();
     return *this;
 }
 
 Point Point::operator+(const Point& other) const {
     Point pt = Point(*this);
     pt += other;
+    return pt;
+}
+
+Point Point::operator+(const float factor) const {
+    Point pt = Point(*this);
+    pt.x(pt.x() + factor);
+    pt.y(pt.y() + factor);
+    pt.z(pt.z() + factor);
     return pt;
 }
 
@@ -200,19 +196,23 @@ Point Point::operator*(const float factor) const {
     return pt;
 }
 
-void Point::makeLength(float wantedLength) {
-    float dist = getDist();
-    setPos(getX() * wantedLength / dist, getY() * wantedLength / dist, getZ() * wantedLength / dist);
+void Point::makeLength(float length) {
+    float factor = length / size();
+    setPos(m_x * factor, m_y * factor, m_z * factor);
 }
 
 Point Point::cross(const Point& other) const {
     Point out = Point();
-    out.setPos(getY() * other.getZ() - getZ() * other.getY(), getZ() * other.getX() - getX() * other.getZ(), getX() * other.getY() - getY() * other.getX());
+    out.setPos(
+        m_y * other.z() - m_z * other.y(),
+        m_z * other.x() - m_x * other.z(),
+        m_x * other.y() - m_y * other.x()
+    );
     return out;
 }
 
 float Point::dot(const Point& other) const {
-    float out = (getX() * other.getX()) + (getY() * other.getY()) + (getZ() * other.getZ());
+    float out = m_x * other.x() + m_y * other.y() + m_z * other.z();
     return out;
 }
 

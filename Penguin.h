@@ -22,17 +22,6 @@ float frand() {
     return ((float) rand() / (float) RAND_MAX);
 }
 
-float bound(float val, float low, float high) {
-    float range = high - low;
-    while (val > high) {
-        val -= range;
-    }
-    while (val < low) {
-        val += range;
-    }
-    return val;
-}
-
 GLfloat white[3] = {1.0, 1.0, 1.0};
 GLfloat black[3] = {0.0, 0.0, 0.0};
 
@@ -49,7 +38,7 @@ typedef std::vector<Penguin> PenguinsContainer;
 typedef PenguinsContainer::iterator penguinIt;
 typedef PenguinsContainer::const_iterator penguinCi;
 
-class Penguin: public Point {
+class Penguin {
     public:
         Penguin(GLfloat* pos, GLfloat* vel);
         Penguin(Point pos, Point vel);
@@ -60,13 +49,21 @@ class Penguin: public Point {
         void drawNewt() const;
         void draw(bool isFocus, bool isPenguin) const;
         float getTheta() const {
-            return rad2deg * atan2(velocity.getY(), velocity.getX());
+            return rad2deg * atan2(m_velocity.y(), m_velocity.x());
         }
         float getPhi() const {
-            return rad2deg * acos(velocity.getZ() / velocity.size());
+            return rad2deg * acos(m_velocity.z() / m_velocity.size());
         }
-        Point getVel() const {
-            return velocity;
+        const Point getPosRef() const {
+            return m_position;
+        }
+        const Point getVelRef() const {
+            return m_velocity;
+        }
+        Point getVelCopy(float size) const {
+            Point velocityCopy = Point(m_velocity);
+            velocityCopy.makeLength(size);
+            return velocityCopy;
         }
         Point getUp() const {
             float phi = getPhi();
@@ -78,38 +75,33 @@ class Penguin: public Point {
             );
         }
         float getSpeed() const;
-        void timeStep(const PenguinsContainer& others, const Bowl& bowl);
+        void timeStep(const PenguinsContainer& others, const Bowl& bowl, VoxelGrid& voxelGrid, bool ignoreOthers);
         void otherPenguinTimeStep(const Penguin& other);
 
         void increaseDist() {
-            closeDist *= 2.0;
-            mediumDist *= 2.0;
-            farDist *= 2.0;
+            m_closeDist *= 2.0;
+            m_mediumDist *= 2.0;
+            m_farDist *= 2.0;
         }
-        ;
         void decreaseDist() {
-            closeDist /= 2.0;
-            mediumDist /= 2.0;
-            farDist /= 2.0;
+            m_closeDist /= 2.0;
+            m_mediumDist /= 2.0;
+            m_farDist /= 2.0;
         }
-        ;
-
         GLfloat getCloseDist() const {
-            return closeDist;
+            return m_closeDist;
         }
         GLfloat getMediumDist() const {
-            return mediumDist;
+            return m_mediumDist;
         }
         GLfloat getFarDist() const {
-            return farDist;
+            return m_farDist;
         }
-        GLfloat getSize() const {
-            return sizeOfPenguin;
+        GLfloat getScale() const {
+            return penguinScale;
         }
         void setColor(float x, float y, float z) {
-            color.setX(x);
-            color.setY(y);
-            color.setZ(z);
+            color.setPos(x, y, z);
         }
         Point getColor() const {
             return color;
@@ -120,13 +112,14 @@ class Penguin: public Point {
         void printDists();
 
         void setVel(Point newVel) {
-            velocity = newVel;
+            m_velocity = newVel;
         }
         void dump();
     private:
-        Point velocity;
+        Point m_position;
+        Point m_velocity;
         Point color;
-        GLfloat racismLevel;
+        GLfloat racism;
 
         GLfloat acceleration;
         GLfloat maxSpeed;
@@ -139,13 +132,13 @@ class Penguin: public Point {
         GLfloat headYawAngle;
         GLfloat headYawAngleIncrement;
 
-        GLfloat closeDist;
-        GLfloat mediumDist;
-        GLfloat farDist;
+        GLfloat m_closeDist;
+        GLfloat m_mediumDist;
+        GLfloat m_farDist;
 
         GLUquadricObj *quad;
         GLuint texture;
-        GLfloat sizeOfPenguin;
+        GLfloat penguinScale;
 
         void setup();
         float distanceTo(const Penguin& other) const;
@@ -158,8 +151,8 @@ class Penguin: public Point {
         void drawFeet() const;
         void drawFlipper(bool right = true) const;
         void drawFlippers() const;
-        void moveAway(const Penguin& other);
-        void moveTowards(const Penguin& other);
+        void accelerateAway(const Penguin& other, const bool away = true);
+        void accelerateTowards(const Penguin& other);
 
         void bounce(Point normalVector);
 };
@@ -170,18 +163,18 @@ Penguin::Penguin() {
 
 Penguin::Penguin(GLfloat *pos, GLfloat* vel) {
     setup();
-    setPos(pos);
-    velocity.setPos(vel);
+    m_position.setPos(pos);
+    m_velocity.setPos(vel);
 }
 
 Penguin::Penguin(Point pos, Point vel) {
     setup();
-    setPos(pos.getX(), pos.getY(), pos.getZ());
-    velocity.setPos(vel.getX(), vel.getY(), vel.getZ());
+    m_position.setPos(pos);
+    m_velocity.setPos(vel);
 }
 
 void Penguin::setup() {
-    racismLevel = 0.20;
+    racism = 0.20;
     footAngle = 0.0;
     footAngleIncrement = 5.0;
     flipperAngle = 0.0;
@@ -192,25 +185,25 @@ void Penguin::setup() {
 
     float randVal = frand();
     if (randVal < 0.33) {
-        color.setX(color.getX() * 10.0);
+        color.x(color.x() * 10.0);
     } else if (randVal < 0.67) {
-        color.setY(color.getY() * 10.0);
+        color.y(color.y() * 10.0);
     } else {
-        color.setZ(color.getZ() * 10.0);
+        color.z(color.z() * 10.0);
     }
 
-    sizeOfPenguin = 0.010;
+    penguinScale = 0.010;
 
-    closeDist = 3.0 * sizeOfPenguin;
-    mediumDist = 7.0 * sizeOfPenguin;
-    farDist = 15.0 * sizeOfPenguin;
+    m_closeDist = 3.0 * penguinScale;
+    m_mediumDist = 7.0 * penguinScale;
+    m_farDist = 15.0 * penguinScale;
 
     acceleration = 0.020;
     maxSpeed = 0.020;
     accelerationFactor = 1.001;
 
-    setPos(0.0, 0.0, 0.0);
-    velocity.setPos(0.0, 0.0, 0.0);
+    m_position.setPos(0.0, 0.0, 0.0);
+    m_velocity.setPos(0.0, 0.0, 0.0);
 
     quad = gluNewQuadric();
     gluQuadricNormals(quad, GLU_SMOOTH);
@@ -218,7 +211,7 @@ void Penguin::setup() {
 }
 
 void Penguin::drawColorSetup() const {
-    GLfloat tmpColor[3] = {color.getX(), color.getY(), color.getZ()};
+    GLfloat tmpColor[3] = {color.x(), color.y(), color.z()};
     glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT,  tmpColor);
     //glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE,   tmpColor);
     glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR,  tmpColor);
@@ -232,13 +225,13 @@ void Penguin::draw(bool isFocus, bool isPenguin) const {
         drawColorSetup();
 
         // Position
-        glTranslatef(getX(), getY(), getZ());
+        glTranslatef(m_position.x(), m_position.y(), m_position.z());
 
         // Pitch and Yaw:
         glRotatef(getTheta(), 0.0, 0.0, 1.0);
         glRotatef(getPhi(), 0.0, 1.0, 0.0);
 
-        glScalef(sizeOfPenguin, sizeOfPenguin, sizeOfPenguin);
+        glScalef(penguinScale, penguinScale, penguinScale);
         if (isFocus && !isPenguin) {
             drawNewt();
         } else {
@@ -367,26 +360,31 @@ void Penguin::drawFlippers() const {
     glPopMatrix();
 }
 
-void Penguin::timeStep(const PenguinsContainer& others, const Bowl& bowl) {
+void Penguin::timeStep(const PenguinsContainer& others, const Bowl& bowl, VoxelGrid& voxelGrid, bool ignoreOthers) {
 
-    for (size_t ii = 0; ii < others.size(); ++ii) {
+    for (size_t i = 0; i < others.size(); ++i) {
         // Skip self and others that you've already seen (do the bottom
         //   diagonal of the matrix, using 'break')
         //
-        if (this == &others[ii]) {
+        if (this == &others[i]) {
             break;
         }
+        Point address = bowl.getVoxelAddress(getPosRef());
+        voxelGrid.updateContents(address);
+
 
         // Modify current penguin based on another penguin:
         //
-        otherPenguinTimeStep(others[ii]);
+        if (!ignoreOthers) {
+            otherPenguinTimeStep(others[i]);
+        }
     }
 
-    if (bowl.isOutside(*this)) {
-        bounce(bowl.vecToEdge(*this));
+    if (bowl.isOutside(m_position)) {
+        bounce(bowl.vecToEdge(m_position));
     }
 
-    // Move:
+    // Animate:
     //
     footAngleIncrement *= (footAngle > maxFootAngle || footAngle < -maxFootAngle) ? -1 : 1;
     flipperAngleIncrement *= (flipperAngle > maxFlipperAngle || flipperAngle < -maxFlipperAngle)  ? -1 : 1;
@@ -395,13 +393,13 @@ void Penguin::timeStep(const PenguinsContainer& others, const Bowl& bowl) {
     flipperAngle += flipperAngleIncrement; // flap flipper
     headYawAngle += headYawAngleIncrement ; // turn head
 
-    setX(getX() + velocity.getX());
-    setY(getY() + velocity.getY());
-    setZ(getZ() + velocity.getZ());
+    // Animate:
+    //
+    m_position += m_velocity;
+    m_velocity *= frand() < 0.5 ? accelerationFactor : 1.0 / accelerationFactor;
 
-    velocity *= frand() < 0.5 ? accelerationFactor : 1.0 / accelerationFactor;
     if (getSpeed() > maxSpeed) {
-        velocity.makeLength(maxSpeed);
+        m_velocity.makeLength(maxSpeed);
     }
 }
 
@@ -409,15 +407,15 @@ void Penguin::otherPenguinTimeStep(const Penguin& other) {
     // Skip differently-colored penguin:
     //
     Point colorDiff = getColor() - other.getColor();
-    if (colorDiff.size() > racismLevel) {
+    if (colorDiff.size() > racism) {
         return;
     }
 
     float dist = distanceTo(other);
-    if (dist < closeDist) {
-        moveAway(other);
-    } else if (dist > mediumDist && dist < farDist) {
-        moveTowards(other);
+    if (dist < m_closeDist) {
+        accelerateAway(other);
+    } else if (dist > m_mediumDist && dist < m_farDist) {
+        accelerateTowards(other);
     } else {
         ;// do nothing
     }
@@ -425,47 +423,44 @@ void Penguin::otherPenguinTimeStep(const Penguin& other) {
 
 void Penguin::bounce(Point normalVector) {
     normalVector.makeLength(1.0);
-    Point twoNTimesIDotN = normalVector * 2.0 * velocity.dot(normalVector);
-    setVel(getVel() - twoNTimesIDotN);
+    Point twoNTimesIDotN = normalVector * 2.0 * m_velocity.dot(normalVector);
+    setVel(m_velocity - twoNTimesIDotN);
 }
 
 float Penguin::distanceTo(const Penguin& other) const {
-    Point diff = *this - other;
-    return diff.getDist();
+    Point diff = m_position - other.m_position;
+    return diff.size();
 }
 
 float Penguin::velDiff(const penguinCi otherCi) const {
-    Point velDiff = velocity - otherCi->velocity;
+    Point velDiff = m_velocity - otherCi->m_velocity;
     return velDiff.size();
 }
 
-void Penguin::moveAway(const Penguin& other) {
-    GLfloat aa = acceleration;
-    GLfloat bb = 1.0 - aa;
-    velocity.setX(bb * velocity.getX() - aa * other.velocity.getX());
-    velocity.setY(bb * velocity.getY() - aa * other.velocity.getY());
-    velocity.setZ(bb * velocity.getZ() - aa * other.velocity.getZ());
+void Penguin::accelerateAway(const Penguin& other, const bool away) {
+    Point v1 = m_velocity * (1.0 - acceleration);
+    Point v2 = other.m_velocity * acceleration;
+    float direction = away ? -1.0 : 1.0;
+    m_velocity = v1 + v2 * direction;
 }
 
-void Penguin::moveTowards(const Penguin& other) {
-    GLfloat aa = acceleration;
-    GLfloat bb = 1.0 - aa;
-    velocity.setX(bb * velocity.getX() + aa * other.velocity.getX());
-    velocity.setY(bb * velocity.getY() + aa * other.velocity.getY());
-    velocity.setZ(bb * velocity.getZ() + aa * other.velocity.getZ());
+void Penguin::accelerateTowards(const Penguin& other) {
+    accelerateAway(other, false);
 }
 
 float Penguin::getSpeed() const {
-    return velocity.size();
+    return m_velocity.size();
 }
 
 void Penguin::printDists() {
-    cout << "Size: " << getSize() << ", Close radius: " << getCloseDist() << ", Far radius: " << getFarDist() << std::endl;
+    cout << "Size: " << getScale() 
+         << ", Close radius: " << getCloseDist() 
+         << ", Far radius: " << getFarDist() << std::endl;
 }
 
 void Penguin::dump() {
-    cout << getX() << " " << getY() << " " << getZ() << " ";
-    cout << getVel().getX() << " " << getVel().getY() << " " << getVel().getZ() << endl;
+    cout << m_position.x() << " " << m_position.y() << " " << m_position.z() << " ";
+    cout << m_velocity.x() << " " << m_velocity.y() << " " << m_velocity.z() << endl;
 }
 
 #endif
