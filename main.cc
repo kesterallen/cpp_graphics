@@ -1,4 +1,5 @@
 
+#include "VoxelGrid.h"
 #include "Penguin.h"
 #include "Bowl.h"
 
@@ -17,7 +18,7 @@ GLfloat ambientLight[4] = {1.0, 1.0, 1.0, 1.0};
 GLfloat diffuseLight[4] = {1.0, 1.0, 1.0, 1.0};
 GLfloat specularLight[4] = {1.0, 1.0, 1.0, 1.0};
 
-int nPenguins = 200;
+int nPenguins = 100;
 int nViewpointPenguins = 5;
 
 GLfloat cameraDist = 1.0;
@@ -32,7 +33,7 @@ Bowl bowl;
 VoxelGrid voxelGrid;
 PenguinsContainer penguins;
 
-void initFish() {
+void initPenguins() {
     penguins.clear();
     for (int ii = 0; ii < nPenguins; ++ii) {
         GLfloat pos[3] = {frand() - .5, frand() - .5, frand() - .5};
@@ -105,8 +106,20 @@ void animateNothing(int id) {
 void animation(int id) {
 
     if (!isPaused) {
+
+        // update voxels
+        voxelGrid.clear();
+        Point lowCorner = Point(-bowl.radius(), -bowl.radius(), -bowl.radius());
+        Point highCorner = Point(bowl.radius(), bowl.radius(), bowl.radius());
+
         for (penguinIt it = penguins.begin(); it != penguins.end(); ++it) {
-            it->timeStep(penguins, bowl, voxelGrid, ignoreOthers);
+            Point address = voxelGrid.getVoxelAddress(it->getPosRef(), lowCorner, highCorner);
+            voxelGrid.updateContents(address, *it);
+            it->setVoxelAddress(address);
+        }
+
+        for (penguinIt it = penguins.begin(); it != penguins.end(); ++it) {
+            it->timeStep(bowl, voxelGrid, ignoreOthers);
         }
 
         eye.setPos(
@@ -148,7 +161,7 @@ void keyboard(unsigned char key, int x, int y) {
         reshape(winWidth, winHeight);
         break;
     case 'R':
-        initFish();
+        initPenguins();
         break;
     case '+':
     case '=':
@@ -222,7 +235,9 @@ void initGlut() {
 
 int main(int argc, char** argv) {
     bowl = Bowl();
-    initFish();
+    voxelGrid = VoxelGrid();
+
+    initPenguins();
 
     glutInit(&argc, argv);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH);
