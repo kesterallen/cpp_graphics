@@ -10,7 +10,7 @@ GLfloat viewAngle = 90.0; // deg
 
 bool ignoreOthers = false;
 bool isPaused = false;
-bool isPenguin = true;
+bool isPenguin = false;
 int iView = 0;
 
 GLfloat posLight[4] = {1.0, 0.0, 0.0, 0.0};
@@ -18,7 +18,7 @@ GLfloat ambientLight[4] = {1.0, 1.0, 1.0, 1.0};
 GLfloat diffuseLight[4] = {1.0, 1.0, 1.0, 1.0};
 GLfloat specularLight[4] = {1.0, 1.0, 1.0, 1.0};
 
-int nPenguins = 100;
+int nPenguins = 600;
 int nViewpointPenguins = 5;
 
 GLfloat cameraDist = 1.0;
@@ -38,7 +38,9 @@ void initPenguins() {
     for (int ii = 0; ii < nPenguins; ++ii) {
         GLfloat pos[3] = {frand() - .5, frand() - .5, frand() - .5};
         GLfloat vel[3] = {0.02 * (frand() - .5), 0.02 * (frand() - .5), 0.02 * (frand() - .5)};
-        penguins.push_back(Penguin(pos, vel));
+        Penguin penguin = Penguin(pos, vel);
+        penguin.id(ii);
+        penguins.push_back(penguin);
     }
     penguins[0].printDists();
 }
@@ -91,7 +93,7 @@ void display() {
     //
     bowl.draw();
     int i = 0;
-    for (penguinIt it = penguins.begin(); it != penguins.end(); ++it) {
+    for (pit it = penguins.begin(); it != penguins.end(); ++it) {
         it->draw(i++ == iView, isPenguin);
     }
 
@@ -103,30 +105,60 @@ void animateNothing(int id) {
     glutTimerFunc(timeStepSize, animateNothing, id);
 }
 
+float averagePenguinSpeed(PenguinsContainer penguins) {
+    float average = 0.0;
+    for (pit it = penguins.begin(); it != penguins.end(); ++it) {
+        average += it->getSpeed();
+    }
+    average /= penguins.size();
+    return average;
+}
+
+void updateVoxels() {
+    voxelGrid.clear();
+    Point lowCorner = Point(-bowl.radius(), -bowl.radius(), -bowl.radius());
+    Point highCorner = Point(bowl.radius(), bowl.radius(), bowl.radius());
+
+    for (pit it = penguins.begin(); it != penguins.end(); ++it) {
+        Point address = voxelGrid.getVoxelAddress(it->getPosRef(), lowCorner, highCorner);
+        it->setVoxelAddress(address);
+        voxelGrid.updateContents(address, *it);
+    }
+}
+void considerOthers() {
+    if (!ignoreOthers) {
+        // Flock to other penguins nearby penguins (within each voxel):
+        Voxels populatedVoxels = voxelGrid.getPopulatedVoxels();
+        for (veIt itv = populatedVoxels.begin(); itv != populatedVoxels.end(); ++itv) {
+            // voxel = *itv;
+            for (pit itp1 = itv->begin(); itp1 != itv->end(); ++itp1) {
+                for (pit itp2 = itv->begin(); itp2 != itv->end(); ++itp2) {
+                    // penguin = *itp1;
+                    // other = *itp2;
+                    itp1->otherPenguinTimeStep(*itp2);
+                }
+            }
+        }
+    }
+
+    voxelGrid.printStats();
+}
+
 void animation(int id) {
 
     if (!isPaused) {
 
-        // update voxels
-        voxelGrid.clear();
-        Point lowCorner = Point(-bowl.radius(), -bowl.radius(), -bowl.radius());
-        Point highCorner = Point(bowl.radius(), bowl.radius(), bowl.radius());
+        updateVoxels();
 
-        for (penguinIt it = penguins.begin(); it != penguins.end(); ++it) {
-            Point address = voxelGrid.getVoxelAddress(it->getPosRef(), lowCorner, highCorner);
-            voxelGrid.updateContents(address, *it);
-            it->setVoxelAddress(address);
+        for (pit it = penguins.begin(); it != penguins.end(); ++it) {
+            it->timeStep(bowl);
         }
 
-        for (penguinIt it = penguins.begin(); it != penguins.end(); ++it) {
-            it->timeStep(bowl, voxelGrid, ignoreOthers);
-        }
+        considerOthers();
 
-        eye.setPos(
-            cameraDist * sin(cameraTheta),
-            cameraDist * sin(cameraPhi),
-            cameraDist * cos(cameraTheta)
-        );
+        cout << averagePenguinSpeed(penguins) << endl;
+
+        eye.setPos(cameraDist * sin(cameraTheta), cameraDist * sin(cameraPhi), cameraDist * cos(cameraTheta));
         look.setPos(0.0, 0.0, 0.0);
         up.setPos(0.0, 1.0, 0.0);
 
@@ -165,17 +197,17 @@ void keyboard(unsigned char key, int x, int y) {
         break;
     case '+':
     case '=':
-        for (penguinIt it = penguins.begin(); it != penguins.end(); ++it) {
+        for (pit it = penguins.begin(); it != penguins.end(); ++it) {
             it->increaseDist();
         }
         penguins.begin()->printDists();
         break;
     case '-':
     case '_':
-        for (penguinIt it = penguins.begin(); it != penguins.end(); ++it) {
+        for (pit it = penguins.begin(); it != penguins.end(); ++it) {
             it->decreaseDist();
         }
-        for (penguinIt it = penguins.begin(); it != penguins.end(); ++it) {
+        for (pit it = penguins.begin(); it != penguins.end(); ++it) {
             penguins.begin()->printDists();
         }
         break;

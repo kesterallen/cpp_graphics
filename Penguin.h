@@ -1,12 +1,15 @@
 #ifndef PENGUIN_H
 #define PENGUIN_H
 
+#include <iostream>
+
+#include <GL/glut.h>
+
 #include "Point.h"
 #include "Bowl.h"
 #include "VoxelGrid.h"
 #include "Penguin.h"
 
-#include <GL/glut.h>
 
 float frand(); 
 
@@ -14,14 +17,14 @@ class VoxelGrid;
 class Penguin;
 
 typedef std::vector<Penguin> PenguinsContainer;
-typedef PenguinsContainer::iterator penguinIt;
-typedef PenguinsContainer::const_iterator penguinCi;
+typedef PenguinsContainer::iterator pit;
+typedef PenguinsContainer::const_iterator pitc;
 
 class Penguin {
     public:
         Penguin(GLfloat* pos, GLfloat* vel);
         Penguin(Point pos, Point vel);
-        Penguin(const penguinCi fi);
+        Penguin(const pitc fi);
         Penguin();
         ~Penguin() {
         }
@@ -57,7 +60,7 @@ class Penguin {
             );
         }
         float getSpeed() const;
-        void timeStep(const Bowl& bowl, VoxelGrid& voxelGrid, bool ignoreOthers);
+        void timeStep(const Bowl& bowl);
         void otherPenguinTimeStep(const Penguin& other);
 
         void increaseDist() {
@@ -97,7 +100,10 @@ class Penguin {
             m_velocity = newVel;
         }
         void dump();
+        int id() const { return m_id; }
+        void id(int id) { m_id = id; }
     private:
+        int m_id;
         Point m_position;
         Point m_velocity;
         Point m_voxelAddress;
@@ -125,7 +131,7 @@ class Penguin {
 
         void setup();
         float distanceTo(const Penguin& other) const;
-        float velDiff(const penguinCi otherCi) const;
+        float velDiff(const pitc otherCi) const;
 
         void drawBody() const;
         void drawColorSetup() const;

@@ -47,6 +47,7 @@ Penguin::Penguin(Point pos, Point vel) {
 }
 
 void Penguin::setup() {
+    m_id = 0;
     racism = 0.20;
     footAngle = 0.0;
     footAngleIncrement = 5.0;
@@ -114,38 +115,65 @@ void Penguin::draw(bool isFocus, bool isPenguin) const {
         glRotatef(getPhi(), 0.0, 1.0, 0.0);
 
         glScalef(penguinScale, penguinScale, penguinScale);
-        if (isFocus && !isPenguin) {
-            drawNewt();
-        } else {
+        if (isPenguin) {
             drawBody();
+        } else {
+            drawNewt();
         }
     glPopMatrix();
 }
 
 void Penguin::drawNewt() const {
     glPushMatrix();
-        glScalef(3.2, 1.4, 6.0);
-        gluSphere(quad, 1.0, 8, 8);
-
+        // Body
         glPushMatrix();
-            glScalef( 2.0, 0.1, 1.0 );
-            glTranslatef( 0.25, 0.0, 0.0 );
-            glutSolidSphere( 0.3, 8, 8 );
+            glScalef(1.0, 2.0, 6.0);
+            gluSphere(quad, 1.0, SLICES, STACKS);
         glPopMatrix();
 
+        // head
         glPushMatrix();
-            glRotatef(225.0, 1, 0, 0);
-            glTranslatef(0.0, 1.0, 0.0);
-            glScalef(0.4, 1.0, 0.1);
-            glutSolidSphere(1.0, 8, 8);
+            // head
+            glTranslatef(0.0, 0.0, 6.0);
+            glutSolidSphere(1.0, SLICES, STACKS);
+
+            // Head antenae
+            for (int idir = 0; idir < 2; ++idir) {
+                float offset = idir == 0 ? 1.2 : -1.2;
+                for (int irot = 0; irot < 3; ++irot) {
+                    float angle = (irot - 1) * 30.0;
+                    glPushMatrix();
+                        glRotatef(angle, 0.0, 0.0, 1.0);
+                        glTranslatef(0.0, offset, 0.0);
+                        glScalef(1.0, 5.0, 1.0);
+                        glutSolidSphere(0.3, SLICES, STACKS);
+                    glPopMatrix();
+                }
+            }
+
+            // eyes:
+            for (int i = 0; i < 2; ++i) {
+                float offset = i == 0 ? 0.7 : -0.7;
+                glPushMatrix();
+                    glTranslatef(0.0, offset, 1.0);
+                    glutSolidSphere(0.2, SLICES, STACKS);
+                glPopMatrix();
+            }
         glPopMatrix();
 
+        // legs
         glPushMatrix();
-            glRotatef(315.0, 1, 0, 0);
-            glTranslatef(0.0, 1.0, 0.0);
-            glScalef(0.4, 1.0, 0.1);
-            glutSolidSphere(1.0, 8, 8);
+            for (int ileg = 0; ileg < 4; ++ileg) {
+                float right = ileg < 2 ? 4.0 : -4.0;
+                float front = ileg % 2 == 0 ? 3.0 : 0.0;
+                glPushMatrix();
+                    glTranslatef(0.0, right, front);
+                    glScalef(1.0, 5.0, 1.0);
+                    glutSolidSphere(1.0, SLICES, STACKS);
+                glPopMatrix();
+            }
         glPopMatrix();
+
     glPopMatrix();
 }
 
@@ -242,18 +270,12 @@ void Penguin::drawFlippers() const {
     glPopMatrix();
 }
 
-void Penguin::timeStep(const Bowl& bowl, VoxelGrid& voxelGrid, bool ignoreOthers) {
-
-    PenguinsContainer others = voxelGrid.getContents(m_voxelAddress);
-    for (size_t i = 0; i < others.size(); ++i) {
-        otherPenguinTimeStep(others[i]);
-    }
-
+void Penguin::timeStep(const Bowl& bowl) {
     if (bowl.isOutside(m_position)) {
         bounce(bowl.vecToEdge(m_position));
     }
 
-    // Animate:
+    // Move body parts:
     //
     footAngleIncrement *= (footAngle > maxFootAngle || footAngle < -maxFootAngle) ? -1 : 1;
     flipperAngleIncrement *= (flipperAngle > maxFlipperAngle || flipperAngle < -maxFlipperAngle)  ? -1 : 1;
@@ -262,10 +284,10 @@ void Penguin::timeStep(const Bowl& bowl, VoxelGrid& voxelGrid, bool ignoreOthers
     flipperAngle += flipperAngleIncrement; // flap flipper
     headYawAngle += headYawAngleIncrement ; // turn head
 
-    // Animate:
+    // move / accelerate:
     //
     m_position += m_velocity;
-    m_velocity *= frand() < 0.5 ? accelerationFactor : 1.0 / accelerationFactor;
+    m_velocity *= (frand() < 0.5) ? accelerationFactor : 1.0 / accelerationFactor;
 
     if (getSpeed() > maxSpeed) {
         m_velocity.makeLength(maxSpeed);
@@ -273,9 +295,7 @@ void Penguin::timeStep(const Bowl& bowl, VoxelGrid& voxelGrid, bool ignoreOthers
 }
 
 void Penguin::otherPenguinTimeStep(const Penguin& other) {
-    // Skip self TODO: is this right?
-    if (this == &other) {
-        cout << "skipping" << endl;
+    if (this->id() == other.id()) {
         return;
     }
 
@@ -307,16 +327,20 @@ float Penguin::distanceTo(const Penguin& other) const {
     return diff.size();
 }
 
-float Penguin::velDiff(const penguinCi otherCi) const {
-    Point velDiff = m_velocity - otherCi->m_velocity;
+float Penguin::velDiff(const pitc itOther) const {
+    Point velDiff = m_velocity - itOther->m_velocity;
     return velDiff.size();
 }
 
-void Penguin::accelerateAway(const Penguin& other, const bool away) {
+void Penguin::accelerateAway(const Penguin& other, bool away) {
+    // 8pm: 0.00967 ->  (11 hrs later): 0.00113 
+    // 
     Point v1 = m_velocity * (1.0 - acceleration);
     Point v2 = other.m_velocity * acceleration;
     float direction = away ? -1.0 : 1.0;
+    Point orig = m_velocity;
     m_velocity = v1 + v2 * direction;
+    m_velocity.makeLength(orig.size());
 }
 
 void Penguin::accelerateTowards(const Penguin& other) {
@@ -337,4 +361,3 @@ void Penguin::dump() {
     cout << m_position.x() << " " << m_position.y() << " " << m_position.z() << " ";
     cout << m_velocity.x() << " " << m_velocity.y() << " " << m_velocity.z() << endl;
 }
-
